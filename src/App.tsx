@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Menu, X, Play, ListChecks, AlertTriangle, Clock, ChevronLeft, ChevronRight, CheckCircle2, Filter, Eye } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Menu, X, Play, ListChecks, AlertTriangle, Clock, ChevronLeft, ChevronRight, Filter, Eye } from 'lucide-react';
 
 interface InspectResult {
   id: string;
@@ -15,45 +15,59 @@ interface InspectResult {
 
 const SUB_PAGES = [
   { id: 'home', name: '首頁', url: 'https://agrinetzero.moa.gov.tw/', subUrls: [] },
-  { id: 'about', name: '認識農業淨零', url: 'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/Intro', subUrls: [
-    'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/FourMain',
-    'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/AgriGreenhouseGasInventory',
-    'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/OperationFlagship',
-    'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/NaturalCarbonSinkStrategy',
-    'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/AgriCarbonReductionActions',
-    'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/NetZeroRegulations'
-  ] },
-  { id: 'calc', name: '農業碳排計算', url: 'https://agrinetzero.moa.gov.tw/zh-TW/FarmCarbonEmissionAndCalculate/Intro', subUrls: [
-    'https://agrinetzero.moa.gov.tw/zh-TW/CarbonFactor/List',
-    'https://agrinetzero.moa.gov.tw/zh-TW/PcrSearch/List',
-    'https://agrinetzero.moa.gov.tw/zh-TW/CarbonFootprintSearch/List',
-    'https://agrinetzero.moa.gov.tw/zh-TW/SimpleCalculator/List'
-  ] },
-  { id: 'credit', name: '農業碳權', url: 'https://agrinetzero.moa.gov.tw/zh-TW/FarmCarbonRight/Intro?CurrentTab=Intro', subUrls: [
-    'https://agrinetzero.moa.gov.tw/zh-TW/FarmCarbonRight/Intro?CurrentTab=IncrementalGreenhouseGasOffset',
-    'https://agrinetzero.moa.gov.tw/zh-TW/FarmCarbonRight/Intro?CurrentTab=GreenHouseVoluntaryReductionProject',
-    'https://agrinetzero.moa.gov.tw/zh-TW/FarmCarbonRight/Regulations'
-  ] },
-  { id: 'energy', name: '農業綠能', url: 'https://agrinetzero.moa.gov.tw/zh-TW/Sge/About', subUrls: [
-    'https://agrinetzero.moa.gov.tw/zh-TW/Sge/Regulations'
-  ] },
-  { id: 'circular', name: '循環農業', url: 'https://agrinetzero.moa.gov.tw/zh-TW/AgriCycle/Intro', subUrls: [
-    'https://agrinetzero.moa.gov.tw/zh-TW/AgriCycle/About',
-    'https://agrinetzero.moa.gov.tw/zh-TW/AgriCycle/Info',
-    'https://agrinetzero.moa.gov.tw/zh-TW/AgriCycle/HowTo',
-    'https://agrinetzero.moa.gov.tw/zh-TW/AgriCycle/Regulations'
-  ] },
-  { id: 'esg', name: 'ESG STORE', url: 'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/Intro', subUrls: [
-    'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/About',
-    'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/Mission',
-    'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/Match',
-    'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/CustomService',
-    'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/Cases',
-    'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/FileDownload'
-  ] },
-  { id: 'info', name: '淨零資訊', url: 'https://agrinetzero.moa.gov.tw/zh-TW/News/List', subUrls: [
-    'https://agrinetzero.moa.gov.tw/zh-TW/KnowledgeActivity/List'
-  ] },
+  {
+    id: 'about', name: '認識農業淨零', url: 'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/Intro', subUrls: [
+      'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/FourMain',
+      'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/AgriGreenhouseGasInventory',
+      'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/OperationFlagship',
+      'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/NaturalCarbonSinkStrategy',
+      'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/AgriCarbonReductionActions',
+      'https://agrinetzero.moa.gov.tw/zh-TW/KnowFarmNetZero/NetZeroRegulations'
+    ]
+  },
+  {
+    id: 'calc', name: '農業碳排計算', url: 'https://agrinetzero.moa.gov.tw/zh-TW/FarmCarbonEmissionAndCalculate/Intro', subUrls: [
+      'https://agrinetzero.moa.gov.tw/zh-TW/CarbonFactor/List',
+      'https://agrinetzero.moa.gov.tw/zh-TW/PcrSearch/List',
+      'https://agrinetzero.moa.gov.tw/zh-TW/CarbonFootprintSearch/List',
+      'https://agrinetzero.moa.gov.tw/zh-TW/SimpleCalculator/List'
+    ]
+  },
+  {
+    id: 'credit', name: '農業碳權', url: 'https://agrinetzero.moa.gov.tw/zh-TW/FarmCarbonRight/Intro?CurrentTab=Intro', subUrls: [
+      'https://agrinetzero.moa.gov.tw/zh-TW/FarmCarbonRight/Intro?CurrentTab=IncrementalGreenhouseGasOffset',
+      'https://agrinetzero.moa.gov.tw/zh-TW/FarmCarbonRight/Intro?CurrentTab=GreenHouseVoluntaryReductionProject',
+      'https://agrinetzero.moa.gov.tw/zh-TW/FarmCarbonRight/Regulations'
+    ]
+  },
+  {
+    id: 'energy', name: '農業綠能', url: 'https://agrinetzero.moa.gov.tw/zh-TW/Sge/About', subUrls: [
+      'https://agrinetzero.moa.gov.tw/zh-TW/Sge/Regulations'
+    ]
+  },
+  {
+    id: 'circular', name: '循環農業', url: 'https://agrinetzero.moa.gov.tw/zh-TW/AgriCycle/Intro', subUrls: [
+      'https://agrinetzero.moa.gov.tw/zh-TW/AgriCycle/About',
+      'https://agrinetzero.moa.gov.tw/zh-TW/AgriCycle/Info',
+      'https://agrinetzero.moa.gov.tw/zh-TW/AgriCycle/HowTo',
+      'https://agrinetzero.moa.gov.tw/zh-TW/AgriCycle/Regulations'
+    ]
+  },
+  {
+    id: 'esg', name: 'ESG STORE', url: 'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/Intro', subUrls: [
+      'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/About',
+      'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/Mission',
+      'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/Match',
+      'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/CustomService',
+      'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/Cases',
+      'https://agrinetzero.moa.gov.tw/zh-TW/EsgStore/FileDownload'
+    ]
+  },
+  {
+    id: 'info', name: '淨零資訊', url: 'https://agrinetzero.moa.gov.tw/zh-TW/News/List', subUrls: [
+      'https://agrinetzero.moa.gov.tw/zh-TW/KnowledgeActivity/List'
+    ]
+  },
 ];
 
 interface PageState {
@@ -64,6 +78,7 @@ interface PageState {
   currentPage: number;
   filterStatus: 'all' | 'error' | 'success';
   filterProcessStatus: 'all' | '待處理' | '處理中' | '已解決';
+  filterDiffStatus: 'all' | 'new' | 'removed' | 'unchanged';
   startTime: number | null;
   itemsPerPage: number;
   lastRunTime?: number;
@@ -78,6 +93,7 @@ const defaultPageState: PageState = {
   currentPage: 1,
   filterStatus: 'all',
   filterProcessStatus: 'all',
+  filterDiffStatus: 'all',
   startTime: null,
   itemsPerPage: 20,
 };
@@ -85,7 +101,7 @@ const defaultPageState: PageState = {
 export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedPage, setSelectedPage] = useState(SUB_PAGES[0]);
-  
+
   const [pageStates, setPageStates] = useState<Record<string, PageState>>(() => {
     const saved = localStorage.getItem('agrinet-crawler-state-v3');
     if (saved) {
@@ -103,8 +119,7 @@ export default function App() {
     }
     return {};
   });
-  
-  const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
+
   const [selectedResult, setSelectedResult] = useState<InspectResult | null>(null);
 
   // Save to localStorage when pageStates changes
@@ -177,17 +192,17 @@ export default function App() {
         updatePageState(pageId, prev => {
           const newResults: InspectResult[] = data.data;
           const oldResults = prev.previousResults || [];
-          
+
           if (oldResults.length > 0) {
             const oldKeys = new Set(oldResults.map(r => `${r.sourceUrl}|${r.destinationUrl}|${r.target}`));
             const newKeys = new Set(newResults.map(r => `${r.sourceUrl}|${r.destinationUrl}|${r.target}`));
-            
+
             newResults.forEach(r => {
               const key = `${r.sourceUrl}|${r.destinationUrl}|${r.target}`;
               if (!oldKeys.has(key)) r.diffStatus = 'new';
               else r.diffStatus = 'unchanged';
             });
-            
+
             // Append removed items for full diff visualization
             oldResults.forEach(r => {
               const key = `${r.sourceUrl}|${r.destinationUrl}|${r.target}`;
@@ -201,12 +216,12 @@ export default function App() {
 
           // Sort so that new/removed items are at the top
           newResults.sort((a, b) => {
-             if (a.diffStatus === 'removed' && b.diffStatus !== 'removed') return -1;
-             if (b.diffStatus === 'removed' && a.diffStatus !== 'removed') return 1;
-             if (a.diffStatus === 'new' && b.diffStatus !== 'new') return -1;
-             if (b.diffStatus === 'new' && a.diffStatus !== 'new') return 1;
-             if (a.isError !== b.isError) return a.isError ? -1 : 1;
-             return 0;
+            if (a.diffStatus === 'removed' && b.diffStatus !== 'removed') return -1;
+            if (b.diffStatus === 'removed' && a.diffStatus !== 'removed') return 1;
+            if (a.diffStatus === 'new' && b.diffStatus !== 'new') return -1;
+            if (b.diffStatus === 'new' && a.diffStatus !== 'new') return 1;
+            if (a.isError !== b.isError) return a.isError ? -1 : 1;
+            return 0;
           });
 
           return {
@@ -246,28 +261,33 @@ export default function App() {
   };
 
   const itemsPerPage = currentState.itemsPerPage;
-  const filteredResults = currentState.results.filter(r => {
-    if (currentState.filterStatus === 'error' && !r.isError) return false;
-    if (currentState.filterStatus === 'success' && r.isError) return false;
-    if (currentState.filterProcessStatus !== 'all' && r.processStatus !== currentState.filterProcessStatus) return false;
-    return true;
-  }).sort((a, b) => {
-    if (a.isError && !b.isError) return -1;
-    if (!a.isError && b.isError) return 1;
-    return 0;
-  });
+  const filteredResults = useMemo(() => {
+    return currentState.results.filter(r => {
+      if (currentState.filterStatus === 'error' && !r.isError) return false;
+      if (currentState.filterStatus === 'success' && r.isError) return false;
+      if (currentState.filterProcessStatus !== 'all' && r.processStatus !== currentState.filterProcessStatus) return false;
+      if (currentState.filterDiffStatus !== 'all' && r.diffStatus !== currentState.filterDiffStatus) return false;
+      return true;
+    }).sort((a, b) => {
+      if (a.isError && !b.isError) return -1;
+      if (!a.isError && b.isError) return 1;
+      return 0;
+    });
+  }, [currentState.results, currentState.filterStatus, currentState.filterProcessStatus, currentState.filterDiffStatus]);
 
   const totalPages = Math.ceil(filteredResults.length / itemsPerPage);
-  const paginatedResults = filteredResults.slice((currentState.currentPage - 1) * itemsPerPage, currentState.currentPage * itemsPerPage);
+  const paginatedResults = useMemo(() => {
+    return filteredResults.slice((currentState.currentPage - 1) * itemsPerPage, currentState.currentPage * itemsPerPage);
+  }, [filteredResults, currentState.currentPage, itemsPerPage]);
 
   const renderDiffBadge = (status?: 'new' | 'removed' | 'unchanged') => {
     switch (status) {
       case 'new':
-        return <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">✨ 新增</span>;
+        return <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">新增</span>;
       case 'removed':
-        return <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">❌ 已移除</span>;
+        return <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">已移除</span>;
       case 'unchanged':
-        return <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">✅ 未變更</span>;
+        return <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">未變更</span>;
       default:
         return null;
     }
@@ -279,14 +299,14 @@ export default function App() {
       <div className={`bg-white border-r border-gray-200 transition-all duration-300 flex flex-col ${isSidebarOpen ? 'w-64' : 'w-16'}`}>
         <div className="h-16 flex items-center justify-between px-4 border-b border-gray-100 shrink-0">
           {isSidebarOpen && <span className="font-bold text-gray-800 truncate">功能區塊檢測</span>}
-          <button 
+          <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors mx-auto"
           >
             {isSidebarOpen ? <ChevronLeft size={20} /> : <Menu size={20} />}
           </button>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto py-4">
           {isSidebarOpen && <div className="px-4 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">檢測分頁</div>}
           <ul className="space-y-1 px-2">
@@ -297,19 +317,17 @@ export default function App() {
                     setSelectedPage(page);
                     setSelectedResult(null);
                   }}
-                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${
-                    selectedPage.id === page.id 
-                      ? 'bg-blue-50 text-blue-700 font-medium' 
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
+                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${selectedPage.id === page.id
+                    ? 'bg-blue-50 text-blue-700 font-medium'
+                    : 'text-gray-600 hover:bg-gray-100'
+                    }`}
                   title={page.name}
                 >
-                  <div className={`w-2 h-2 rounded-full mr-3 shrink-0 ${
-                    pageStates[page.id]?.inspectionState === 'loading' ? 'bg-amber-400 animate-pulse' :
+                  <div className={`w-2 h-2 rounded-full mr-3 shrink-0 ${pageStates[page.id]?.inspectionState === 'loading' ? 'bg-amber-400 animate-pulse' :
                     pageStates[page.id]?.inspectionState === 'success' ? 'bg-green-500' :
-                    pageStates[page.id]?.inspectionState === 'error' ? 'bg-red-500' :
-                    selectedPage.id === page.id ? 'bg-blue-500' : 'bg-gray-300'
-                  }`} />
+                      pageStates[page.id]?.inspectionState === 'error' ? 'bg-red-500' :
+                        selectedPage.id === page.id ? 'bg-blue-500' : 'bg-gray-300'
+                    }`} />
                   {isSidebarOpen && <span className="truncate">{page.name}</span>}
                 </button>
               </li>
@@ -330,7 +348,7 @@ export default function App() {
               </span>
             )}
           </h1>
-          
+
           <button
             onClick={startInspection}
             disabled={currentState.inspectionState === 'loading'}
@@ -353,7 +371,7 @@ export default function App() {
         {/* Content Body */}
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-7xl mx-auto space-y-6">
-            
+
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
@@ -386,13 +404,13 @@ export default function App() {
                   <ListChecks size={18} className="text-blue-600" />
                   檢查事件清單
                 </h3>
-                
+
                 <div className="flex flex-wrap items-center gap-4">
                   <div className="flex items-center gap-2">
                     <Filter size={14} className="text-gray-400" />
                     <span className="text-sm font-medium text-gray-600">狀態</span>
                     <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
-                      <select 
+                      <select
                         className="bg-transparent border-none text-sm focus:ring-0 text-gray-600 py-1.5 pl-3 pr-8 cursor-pointer"
                         value={currentState.filterStatus}
                         onChange={(e) => updatePageState(selectedPage.id, { filterStatus: e.target.value as any, currentPage: 1 })}
@@ -403,11 +421,27 @@ export default function App() {
                       </select>
                     </div>
                   </div>
-                  
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-600">差異比對</span>
+                    <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+                      <select
+                        className="bg-transparent border-none text-sm focus:ring-0 text-gray-600 py-1.5 pl-3 pr-8 cursor-pointer"
+                        value={currentState.filterDiffStatus}
+                        onChange={(e) => updatePageState(selectedPage.id, { filterDiffStatus: e.target.value as PageState['filterDiffStatus'], currentPage: 1 })}
+                      >
+                        <option value="all">全部</option>
+                        <option value="new">新增</option>
+                        <option value="removed">已移除</option>
+                        <option value="unchanged">未變更</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-gray-600">處理狀態</span>
                     <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
-                      <select 
+                      <select
                         className="bg-transparent border-none text-sm focus:ring-0 text-gray-600 py-1.5 pl-3 pr-8 cursor-pointer"
                         value={currentState.filterProcessStatus}
                         onChange={(e) => updatePageState(selectedPage.id, { filterProcessStatus: e.target.value as any, currentPage: 1 })}
@@ -421,7 +455,7 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -429,6 +463,7 @@ export default function App() {
                       <th className="p-4 text-sm font-semibold text-gray-500">來源網址</th>
                       <th className="p-4 text-sm font-semibold text-gray-500">點擊標的</th>
                       <th className="p-4 text-sm font-semibold text-gray-500">狀態</th>
+                      <th className="p-4 text-sm font-semibold text-gray-500">差異比對</th>
                       <th className="p-4 text-sm font-semibold text-gray-500">錯誤詳情</th>
                       <th className="p-4 text-sm font-semibold text-gray-500">處理狀態</th>
                       <th className="p-4 text-sm font-semibold text-gray-500 text-center">操作</th>
@@ -437,24 +472,37 @@ export default function App() {
                   <tbody>
                     {currentState.inspectionState === 'idle' && (
                       <tr className="border-b border-gray-50">
-                        <td colSpan={6} className="p-8 text-center text-gray-400 text-sm">尚未執行檢測，請點擊上方「啟動檢測」</td>
+                        <td colSpan={7} className="p-8 text-center text-gray-400 text-sm">尚未執行檢測，請點擊上方「啟動檢測」</td>
                       </tr>
                     )}
-                    
+
                     {currentState.inspectionState === 'loading' && (
-                      <tr className="border-b border-gray-50">
-                        <td colSpan={6} className="p-8 text-center text-blue-500 font-medium text-sm animate-pulse">
-                          <div className="flex items-center justify-center gap-2">
-                            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                            系統深度探索中，請稍候...
-                          </div>
-                        </td>
-                      </tr>
+                      <>
+                        {[1, 2, 3, 4, 5].map(i => (
+                          <tr key={`skel-${i}`} className="border-b border-gray-50 animate-pulse">
+                            <td className="p-4"><div className="h-4 bg-gray-200 rounded w-36"></div></td>
+                            <td className="p-4"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
+                            <td className="p-4"><div className="h-5 bg-gray-200 rounded-full w-14"></div></td>
+                            <td className="p-4"><div className="h-5 bg-gray-200 rounded-full w-16"></div></td>
+                            <td className="p-4"><div className="h-4 bg-gray-200 rounded w-20"></div></td>
+                            <td className="p-4"><div className="h-5 bg-gray-200 rounded w-14"></div></td>
+                            <td className="p-4 text-center"><div className="h-5 bg-gray-200 rounded w-8 mx-auto"></div></td>
+                          </tr>
+                        ))}
+                        <tr className="border-b border-gray-50">
+                          <td colSpan={7} className="p-4 text-center text-blue-500 font-medium text-sm">
+                            <div className="flex items-center justify-center gap-2">
+                              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                              系統探索中，請稍候...
+                            </div>
+                          </td>
+                        </tr>
+                      </>
                     )}
 
                     {currentState.inspectionState === 'error' && (
                       <tr className="border-b border-gray-50">
-                        <td colSpan={6} className="p-8 text-center text-red-500 text-sm font-medium">
+                        <td colSpan={7} className="p-8 text-center text-red-500 text-sm font-medium">
                           {currentState.errorMessage || '連線失敗'}
                         </td>
                       </tr>
@@ -462,7 +510,7 @@ export default function App() {
 
                     {currentState.inspectionState === 'success' && filteredResults.length === 0 && (
                       <tr className="border-b border-gray-50">
-                        <td colSpan={6} className="p-8 text-center text-gray-500 text-sm font-medium">
+                        <td colSpan={7} className="p-8 text-center text-gray-500 text-sm font-medium">
                           沒有符合條件的檢測結果
                         </td>
                       </tr>
@@ -488,6 +536,8 @@ export default function App() {
                               正常
                             </span>
                           )}
+                        </td>
+                        <td className="p-4 whitespace-nowrap">
                           {renderDiffBadge(result.diffStatus)}
                         </td>
                         <td className="p-4 text-sm max-w-[250px]">
@@ -499,11 +549,10 @@ export default function App() {
                         </td>
                         <td className="p-4 whitespace-nowrap">
                           {result.processStatus ? (
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              result.processStatus === '待處理' ? 'bg-orange-50 text-orange-600 border border-orange-200' :
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${result.processStatus === '待處理' ? 'bg-orange-50 text-orange-600 border border-orange-200' :
                               result.processStatus === '處理中' ? 'bg-blue-50 text-blue-600 border border-blue-200' :
-                              'bg-gray-100 text-gray-600 border border-gray-200'
-                            }`}>
+                                'bg-gray-100 text-gray-600 border border-gray-200'
+                              }`}>
                               {result.processStatus}
                             </span>
                           ) : (
@@ -511,7 +560,7 @@ export default function App() {
                           )}
                         </td>
                         <td className="p-4 text-center">
-                          <button 
+                          <button
                             onClick={() => setSelectedResult(result)}
                             className="inline-flex items-center justify-center p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             title="檢視詳情"
@@ -524,16 +573,16 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-              
+
               {/* Pagination Controls */}
               {currentState.inspectionState === 'success' && totalPages > 0 && (
                 <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-center items-center">
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <div className="flex items-center gap-1">
                       <span>每頁</span>
-                      <select 
+                      <select
                         className="bg-white border border-gray-300 text-gray-700 py-1 pl-2 pr-6 rounded focus:ring-1 focus:ring-blue-500 outline-none text-sm appearance-none"
-                        style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.25rem center', backgroundSize: '1em'}}
+                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.25rem center', backgroundSize: '1em' }}
                         value={currentState.itemsPerPage || 20}
                         onChange={(e) => updatePageState(selectedPage.id, { itemsPerPage: Number(e.target.value), currentPage: 1 })}
                       >
@@ -559,11 +608,11 @@ export default function App() {
 
                     <div className="flex items-center gap-1">
                       <span>跳至第</span>
-                      <select 
+                      <select
                         value={currentState.currentPage}
                         onChange={(e) => updatePageState(selectedPage.id, { currentPage: Number(e.target.value) })}
                         className="bg-white border border-gray-300 text-gray-700 py-1 pl-2 pr-6 rounded focus:ring-1 focus:ring-blue-500 outline-none text-sm appearance-none"
-                        style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.25rem center', backgroundSize: '1em'}}
+                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.25rem center', backgroundSize: '1em' }}
                       >
                         {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                           <option key={page} value={page}>{page}</option>
@@ -585,14 +634,14 @@ export default function App() {
                 </div>
               )}
             </div>
-            
+
           </div>
         </main>
       </div>
 
       {/* Drawer Overlay */}
       {selectedResult && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/20 z-40 transition-opacity"
           onClick={() => setSelectedResult(null)}
         />
@@ -605,14 +654,14 @@ export default function App() {
             <ListChecks size={18} className="text-blue-600" />
             檢測詳情
           </h3>
-          <button 
+          <button
             onClick={() => setSelectedResult(null)}
             className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <X size={20} />
           </button>
         </div>
-        
+
         {selectedResult && (
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             <div>
@@ -666,7 +715,7 @@ export default function App() {
                 </div>
               </div>
             )}
-            
+
             <div>
               <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">檢測時間</div>
               <div className="text-sm text-gray-600">

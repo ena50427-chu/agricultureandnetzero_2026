@@ -6,6 +6,41 @@ import * as cheerio from "cheerio";
 import iconv from "iconv-lite";
 import puppeteer from "puppeteer";
 
+// TypeScript Interfaces
+interface InspectPageRequest {
+  targetUrl: string;
+  subUrls?: string[];
+}
+
+interface InspectAllRequest {
+  targetUrl: string;
+}
+
+interface CrawlResult {
+  id: string;
+  sourceUrl: string;
+  destinationUrl: string;
+  target: string;
+  detail: string;
+  processStatus: string;
+  isError: boolean;
+  timestamp: string;
+  isDynamic: boolean;
+}
+
+interface LinkToCheck {
+  text: string;
+  absoluteUrl: string;
+  isDynamic: boolean;
+  uniqueKey: string;
+}
+
+interface ParsedElement {
+  text: string;
+  href: string | null;
+  isDynamic: boolean;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -377,6 +412,21 @@ async function startServer() {
                     
                     // 再等待 1 秒讓捲動後的內容載入
                     await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    // [Round 4 Fix] 自動點擊所有 Tab 按鈕，確保隱藏的 Tab 面板內容被渲染到 DOM
+                    await page.evaluate(async () => {
+                        const tabButtons = document.querySelectorAll('.nav-tabs .nav-link, [role="tab"], .tab-link, [data-bs-toggle="tab"], [data-toggle="tab"]');
+                        for (const btn of Array.from(tabButtons)) {
+                            try {
+                                (btn as HTMLElement).click();
+                                await new Promise(r => setTimeout(r, 1500)); // 等待 Tab 切換動畫與內容載入
+                            } catch (e) {
+                                // 略過點擊失敗的元素
+                            }
+                        }
+                    });
+                    // 再等待 2 秒確保最後一個 Tab 內容完全載入
+                    await new Promise(resolve => setTimeout(resolve, 2000));
                     
                     // 取得所有可點擊元素
                     const elements = await page.evaluate(() => {
