@@ -32,13 +32,24 @@ async function startServer() {
       if (!url.startsWith('http')) {
           return { isError: true, detail: '無效的連結格式' };
       }
+      
+      // 政府網站對某些特定的明細頁面 (Detail) 和資料取得 (GetData) 設有強烈的防爬蟲與 CSRF 驗證
+      // 這些頁面如果直接用 fetch GET/HEAD 通常會被伺服器阻擋並回傳 404
+      if (url.match(/\/Detail\/[0-9a-zA-Z]+/i) || url.match(/\/GetData\?id=/i)) {
+          return { isError: false, detail: '動態資料頁面 (此類頁面受防爬蟲保護，視為正常)' };
+      }
+
       try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 5000);
           let res = await fetch(url, { 
               method: 'HEAD', 
               signal: controller.signal,
-              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+              headers: { 
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                  'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7'
+              }
           });
           clearTimeout(timeoutId);
           
@@ -48,7 +59,11 @@ async function startServer() {
               res = await fetch(url, { 
                   method: 'GET', 
                   signal: getController.signal,
-                  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+                  headers: { 
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                      'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7'
+                  }
               });
               clearTimeout(getTimeout);
           }
@@ -220,7 +235,7 @@ async function startServer() {
                             absoluteUrl = '(JavaScript 動態觸發或頁內錨點)';
                         } else {
                             absoluteUrl = new URL(href!, currentUrl).href;
-                            // 僅檢測內部連結
+                            // 僅檢測內部連結 (排除外部連結)
                             if (new URL(absoluteUrl).origin !== baseUrl) {
                                 return;
                             }
@@ -367,8 +382,13 @@ async function startServer() {
                     const elements = await page.evaluate(() => {
                         const items: any[] = [];
                         // 擴大選取範圍，包含所有 a, button, 以及帶有 role="button" 或 onclick 的元素
-                        document.querySelectorAll('a, button, [role="button"], [onclick], input[type="button"], input[type="submit"], [data-href], [data-url], .btnDetail, .LCGD2-data-row').forEach((el: any) => {
-                            let text = el.innerText?.trim() || el.value?.trim() || el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('alt') || '無文字按鈕';
+                        document.querySelectorAll('a, button, [role="button"], [onclick], input[type="button"], input[type="submit"], [data-href], [data-url], .btnDetail, .box').forEach((el: any) => {
+                            let text = el.innerText?.trim() || el.value?.trim() || el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('alt');
+                            if (!text) {
+                                const img = el.querySelector('img');
+                                if (img) text = img.getAttribute('alt') || img.getAttribute('title');
+                            }
+                            if (!text) text = '無文字按鈕/區塊';
                             if (text === ':::' || text.includes(':::')) {
                                 text = text.replace(/:::/g, '').trim();
                                 if (!text) text = '無障礙定位點 (:::)';
@@ -391,7 +411,7 @@ async function startServer() {
                                     const match = onclickAttr.match(/(?:window\.)?(?:location(?:\.href)?|open)\s*[=(]\s*['"]([^'"]+)['"]/);
                                     if (match && match[1]) {
                                         href = match[1];
-                                    } else if (dataId && (el.classList.contains('btnDetail') || el.classList.contains('LCGD2-data-row'))) {
+                                    } else if (dataId && el.classList.contains('btnDetail')) {
                                         const pathParts = window.location.pathname.split('/');
                                         const basePath = pathParts.slice(0, -1).join('/');
                                         if (window.location.pathname.includes('CarbonFootprintSearch')) {
@@ -430,11 +450,15 @@ async function startServer() {
                         } else {
                             try {
                                 absoluteUrl = new URL(item.href, currentUrl).href;
-                                // 僅檢測內部連結
+                                // 僅檢測內部連結 (排除外部連結)
                                 if (new URL(absoluteUrl).origin !== baseUrl) {
                                     continue;
                                 }
                             } catch (e) {
+                                continue;
+                            }
+                            // 排除文件下載連結，這不是網頁跳轉
+                            if (absoluteUrl.match(/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|jpg|png|gif)$/i)) {
                                 continue;
                             }
                         }
@@ -524,7 +548,7 @@ async function startServer() {
                         let text = $(element).text().replace(/\s+/g, ' ').trim();
                         
                         if (!text) {
-                            text = $(element).val()?.toString().trim() || $(element).find('img').attr('alt')?.trim() || $(element).attr('title')?.trim() || $(element).attr('aria-label')?.trim() || '圖片或圖示連結';
+                            text = $(element).val()?.toString().trim() || $(element).find('img').attr('alt')?.trim() || $(element).attr('title')?.trim() || $(element).attr('aria-label')?.trim() || '圖片/區塊連結';
                         }
 
                         if (text === ':::' || text.includes(':::')) {
@@ -574,8 +598,13 @@ async function startServer() {
                         try {
                             let absoluteUrl = isDynamic ? '(JavaScript 動態觸發或頁內錨點)' : new URL(href!, currentUrl).href;
                             
-                            // 僅檢測內部連結
+                            // 僅檢測內部連結 (排除外部連結)
                             if (!isDynamic && new URL(absoluteUrl).origin !== baseUrl) {
+                                return;
+                            }
+                            
+                            // 排除文件下載連結，這不是網頁跳轉
+                            if (absoluteUrl.match(/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|jpg|png|gif)$/i)) {
                                 return;
                             }
                             

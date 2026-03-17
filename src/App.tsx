@@ -10,6 +10,7 @@ interface InspectResult {
   processStatus: string;
   isError: boolean;
   timestamp: string;
+  diffStatus?: 'new' | 'removed' | 'unchanged';
 }
 
 const SUB_PAGES = [
@@ -63,6 +64,10 @@ interface PageState {
   currentPage: number;
   filterStatus: 'all' | 'error' | 'success';
   filterProcessStatus: 'all' | '待處理' | '處理中' | '已解決';
+  startTime: number | null;
+  itemsPerPage: number;
+  lastRunTime?: number;
+  previousResults?: InspectResult[];
 }
 
 const defaultPageState: PageState = {
@@ -73,15 +78,39 @@ const defaultPageState: PageState = {
   currentPage: 1,
   filterStatus: 'all',
   filterProcessStatus: 'all',
+  startTime: null,
+  itemsPerPage: 20,
 };
 
 export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedPage, setSelectedPage] = useState(SUB_PAGES[0]);
   
-  const [pageStates, setPageStates] = useState<Record<string, PageState>>({});
+  const [pageStates, setPageStates] = useState<Record<string, PageState>>(() => {
+    const saved = localStorage.getItem('agrinet-crawler-state-v3');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Map back to default structure in case of new fields
+        const merged: Record<string, PageState> = {};
+        SUB_PAGES.forEach(page => {
+          merged[page.id] = parsed[page.id] ? { ...defaultPageState, ...parsed[page.id], inspectionState: parsed[page.id].inspectionState === 'loading' ? 'idle' : parsed[page.id].inspectionState } : { ...defaultPageState };
+        });
+        return merged;
+      } catch (e) {
+        console.error('Failed to parse cached states', e);
+      }
+    }
+    return {};
+  });
+  
   const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
   const [selectedResult, setSelectedResult] = useState<InspectResult | null>(null);
+
+  // Save to localStorage when pageStates changes
+  useEffect(() => {
+    localStorage.setItem('agrinet-crawler-state-v3', JSON.stringify(pageStates));
+  }, [pageStates]);
 
   const getPageState = (pageId: string) => pageStates[pageId] || defaultPageState;
   const updatePageState = (pageId: string, updates: Partial<PageState> | ((prev: PageState) => Partial<PageState>)) => {
@@ -97,33 +126,42 @@ export default function App() {
 
   const currentState = getPageState(selectedPage.id);
 
+  // Global timer for all loading pages
   useEffect(() => {
-    if (currentState.inspectionState === 'loading') {
-      const startTime = Date.now() - (currentState.stats.timeElapsed * 1000);
-      const interval = setInterval(() => {
-        updatePageState(selectedPage.id, prev => ({
-          stats: {
-            ...prev.stats,
-            timeElapsed: Math.floor((Date.now() - startTime) / 1000)
+    const interval = setInterval(() => {
+      setPageStates(prev => {
+        let hasChanges = false;
+        const next = { ...prev };
+        for (const [pageId, stateValue] of Object.entries(next)) {
+          const state = stateValue as PageState;
+          if (state.inspectionState === 'loading' && state.startTime) {
+            next[pageId] = {
+              ...state,
+              stats: {
+                ...state.stats,
+                timeElapsed: Math.floor((Date.now() - state.startTime) / 1000)
+              }
+            };
+            hasChanges = true;
           }
-        }));
-      }, 1000);
-      setTimer(interval);
-      return () => clearInterval(interval);
-    } else if (timer) {
-      clearInterval(timer);
-    }
-  }, [currentState.inspectionState, selectedPage.id]);
+        }
+        return hasChanges ? next : prev;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const startInspection = async () => {
     const pageId = selectedPage.id;
-    updatePageState(pageId, {
+    updatePageState(pageId, prev => ({
       inspectionState: 'loading',
       results: [],
       errorMessage: '',
       stats: { total: 0, errors: 0, timeElapsed: 0 },
-      currentPage: 1
-    });
+      currentPage: 1,
+      startTime: Date.now(),
+      previousResults: prev.results.length > 0 ? prev.results : prev.previousResults
+    }));
     setSelectedResult(null);
 
     try {
@@ -136,26 +174,68 @@ export default function App() {
       const data = await response.json();
 
       if (data.success) {
-        updatePageState(pageId, {
-          results: data.data,
-          stats: {
-            total: data.data.length,
-            errors: data.data.filter((r: any) => r.isError).length,
-            timeElapsed: getPageState(pageId).stats.timeElapsed
-          },
-          inspectionState: 'success'
+        updatePageState(pageId, prev => {
+          const newResults: InspectResult[] = data.data;
+          const oldResults = prev.previousResults || [];
+          
+          if (oldResults.length > 0) {
+            const oldKeys = new Set(oldResults.map(r => `${r.sourceUrl}|${r.destinationUrl}|${r.target}`));
+            const newKeys = new Set(newResults.map(r => `${r.sourceUrl}|${r.destinationUrl}|${r.target}`));
+            
+            newResults.forEach(r => {
+              const key = `${r.sourceUrl}|${r.destinationUrl}|${r.target}`;
+              if (!oldKeys.has(key)) r.diffStatus = 'new';
+              else r.diffStatus = 'unchanged';
+            });
+            
+            // Append removed items for full diff visualization
+            oldResults.forEach(r => {
+              const key = `${r.sourceUrl}|${r.destinationUrl}|${r.target}`;
+              if (!newKeys.has(key)) {
+                newResults.push({ ...r, diffStatus: 'removed', isError: true, detail: '此連結已從畫面上移除' });
+              }
+            });
+          } else {
+            newResults.forEach(r => r.diffStatus = 'unchanged');
+          }
+
+          // Sort so that new/removed items are at the top
+          newResults.sort((a, b) => {
+             if (a.diffStatus === 'removed' && b.diffStatus !== 'removed') return -1;
+             if (b.diffStatus === 'removed' && a.diffStatus !== 'removed') return 1;
+             if (a.diffStatus === 'new' && b.diffStatus !== 'new') return -1;
+             if (b.diffStatus === 'new' && a.diffStatus !== 'new') return 1;
+             if (a.isError !== b.isError) return a.isError ? -1 : 1;
+             return 0;
+          });
+
+          return {
+            results: newResults,
+            stats: {
+              total: newResults.length,
+              errors: newResults.filter(r => r.isError && r.diffStatus !== 'removed').length,
+              timeElapsed: prev.stats.timeElapsed
+            },
+            inspectionState: 'success',
+            startTime: null,
+            lastRunTime: Date.now()
+          };
         });
       } else {
-        updatePageState(pageId, {
+        updatePageState(pageId, prev => ({
           errorMessage: data.message || '檢測失敗',
-          inspectionState: 'error'
-        });
+          inspectionState: 'error',
+          startTime: null,
+          stats: { ...prev.stats, timeElapsed: prev.stats.timeElapsed }
+        }));
       }
     } catch (error: any) {
-      updatePageState(pageId, {
+      updatePageState(pageId, prev => ({
         errorMessage: error.message || '連線錯誤',
-        inspectionState: 'error'
-      });
+        inspectionState: 'error',
+        startTime: null,
+        stats: { ...prev.stats, timeElapsed: prev.stats.timeElapsed }
+      }));
     }
   };
 
@@ -165,7 +245,7 @@ export default function App() {
     return `${m}分 ${s}秒`;
   };
 
-  const itemsPerPage = 20;
+  const itemsPerPage = currentState.itemsPerPage;
   const filteredResults = currentState.results.filter(r => {
     if (currentState.filterStatus === 'error' && !r.isError) return false;
     if (currentState.filterStatus === 'success' && r.isError) return false;
@@ -179,6 +259,19 @@ export default function App() {
 
   const totalPages = Math.ceil(filteredResults.length / itemsPerPage);
   const paginatedResults = filteredResults.slice((currentState.currentPage - 1) * itemsPerPage, currentState.currentPage * itemsPerPage);
+
+  const renderDiffBadge = (status?: 'new' | 'removed' | 'unchanged') => {
+    switch (status) {
+      case 'new':
+        return <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">✨ 新增</span>;
+      case 'removed':
+        return <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">❌ 已移除</span>;
+      case 'unchanged':
+        return <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">✅ 未變更</span>;
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans overflow-hidden relative">
@@ -211,7 +304,12 @@ export default function App() {
                   }`}
                   title={page.name}
                 >
-                  <div className={`w-2 h-2 rounded-full mr-3 shrink-0 ${selectedPage.id === page.id ? 'bg-blue-500' : 'bg-gray-300'}`} />
+                  <div className={`w-2 h-2 rounded-full mr-3 shrink-0 ${
+                    pageStates[page.id]?.inspectionState === 'loading' ? 'bg-amber-400 animate-pulse' :
+                    pageStates[page.id]?.inspectionState === 'success' ? 'bg-green-500' :
+                    pageStates[page.id]?.inspectionState === 'error' ? 'bg-red-500' :
+                    selectedPage.id === page.id ? 'bg-blue-500' : 'bg-gray-300'
+                  }`} />
                   {isSidebarOpen && <span className="truncate">{page.name}</span>}
                 </button>
               </li>
@@ -226,6 +324,11 @@ export default function App() {
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0 shadow-sm">
           <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <span className="text-blue-600">{selectedPage.name}</span>
+            {currentState.lastRunTime && (
+              <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded border border-gray-200 ml-2">
+                最後檢測：{new Date(currentState.lastRunTime).toLocaleString('zh-TW')}
+              </span>
+            )}
           </h1>
           
           <button
@@ -385,6 +488,7 @@ export default function App() {
                               正常
                             </span>
                           )}
+                          {renderDiffBadge(result.diffStatus)}
                         </td>
                         <td className="p-4 text-sm max-w-[250px]">
                           {result.isError ? (
@@ -422,59 +526,60 @@ export default function App() {
               </div>
               
               {/* Pagination Controls */}
-              {currentState.inspectionState === 'success' && totalPages > 1 && (
-                <div className="p-4 border-t border-gray-100 bg-white flex items-center justify-between">
-                  <div className="text-sm text-gray-500">
-                    顯示第 {(currentState.currentPage - 1) * itemsPerPage + 1} 到 {Math.min(currentState.currentPage * itemsPerPage, filteredResults.length)} 筆，共 {filteredResults.length} 筆
-                  </div>
-                  <div className="flex items-center gap-1">
+              {currentState.inspectionState === 'success' && totalPages > 0 && (
+                <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-center items-center">
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="flex items-center gap-1">
+                      <span>每頁</span>
+                      <select 
+                        className="bg-white border border-gray-300 text-gray-700 py-1 pl-2 pr-6 rounded focus:ring-1 focus:ring-blue-500 outline-none text-sm appearance-none"
+                        style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.25rem center', backgroundSize: '1em'}}
+                        value={currentState.itemsPerPage || 20}
+                        onChange={(e) => updatePageState(selectedPage.id, { itemsPerPage: Number(e.target.value), currentPage: 1 })}
+                      >
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                      <span>筆，</span>
+                    </div>
+
+                    <span>第 {currentState.currentPage}/{totalPages} 頁，共 {filteredResults.length} 筆，</span>
+
                     <button
                       onClick={() => updatePageState(selectedPage.id, prev => ({ currentPage: Math.max(prev.currentPage - 1, 1) }))}
                       disabled={currentState.currentPage === 1}
-                      className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      title="上一頁"
+                      className={`font-medium ${currentState.currentPage === 1 ? 'text-gray-400 cursor-not-allowed' : 'text-teal-600 hover:text-teal-700 underline underline-offset-2'}`}
                     >
-                      <ChevronLeft size={18} />
+                      上一頁
                     </button>
-                    
-                    <div className="flex items-center px-2 gap-1">
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page, index, array) => {
-                        // Show first, last, current, and adjacent pages
-                        if (
-                          page === 1 ||
-                          page === totalPages ||
-                          (page >= currentState.currentPage - 1 && page <= currentState.currentPage + 1)
-                        ) {
-                          return (
-                            <button
-                              key={page}
-                              onClick={() => updatePageState(selectedPage.id, { currentPage: page })}
-                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                                currentState.currentPage === page
-                                  ? 'bg-blue-600 text-white border border-blue-600'
-                                  : 'text-gray-600 hover:bg-gray-50 border border-transparent hover:border-gray-200'
-                              }`}
-                            >
-                              {page}
-                            </button>
-                          );
-                        } else if (
-                          (page === currentState.currentPage - 2 && page > 1) ||
-                          (page === currentState.currentPage + 2 && page < totalPages)
-                        ) {
-                          return <span key={page} className="text-gray-400 px-1">...</span>;
-                        }
-                        return null;
-                      })}
+
+                    <span className="text-gray-300 px-1">|</span>
+
+                    <div className="flex items-center gap-1">
+                      <span>跳至第</span>
+                      <select 
+                        value={currentState.currentPage}
+                        onChange={(e) => updatePageState(selectedPage.id, { currentPage: Number(e.target.value) })}
+                        className="bg-white border border-gray-300 text-gray-700 py-1 pl-2 pr-6 rounded focus:ring-1 focus:ring-blue-500 outline-none text-sm appearance-none"
+                        style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.25rem center', backgroundSize: '1em'}}
+                      >
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                          <option key={page} value={page}>{page}</option>
+                        ))}
+                      </select>
+                      <span>頁</span>
                     </div>
+
+                    <span className="text-gray-300 px-1">|</span>
 
                     <button
                       onClick={() => updatePageState(selectedPage.id, prev => ({ currentPage: Math.min(prev.currentPage + 1, totalPages) }))}
                       disabled={currentState.currentPage === totalPages}
-                      className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      title="下一頁"
+                      className={`font-medium ${currentState.currentPage === totalPages ? 'text-gray-400 cursor-not-allowed' : 'text-teal-600 hover:text-teal-700 underline underline-offset-2'}`}
                     >
-                      <ChevronRight size={18} />
+                      下一頁
                     </button>
                   </div>
                 </div>
